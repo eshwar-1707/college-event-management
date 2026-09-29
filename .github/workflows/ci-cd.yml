@@ -1,0 +1,57 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Continuous Integration (Test & Build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 3. Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 4. Run Automated PyTest Suite
+        run: |
+          pytest -v
+
+      - name: 5. Build Docker Image
+        run: |
+          docker build -t college-events:latest .
+
+  deploy:
+    name: Continuous Deployment
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to Cloud / Production
+        run: |
+          if [ -n "${{ secrets.DEPLOY_WEBHOOK_URL }}" ]; then
+            echo "Deploy webhook secret detected! Triggering automated deployment..."
+            curl -X POST "${{ secrets.DEPLOY_WEBHOOK_URL }}"
+            echo "Deployment webhook triggered successfully!"
+          else
+            echo "Notice: DEPLOY_WEBHOOK_URL secret not configured in GitHub repository."
+            echo "Continuous Integration completed successfully (Checkout -> Python Setup -> Dependencies -> PyTest -> Docker Build)."
+            echo "To enable automatic deployment, add your cloud deploy webhook URL to GitHub Secrets."
+          fi
